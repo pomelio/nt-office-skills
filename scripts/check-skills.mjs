@@ -32,6 +32,14 @@ const KNOWN_TOOLS = new Set(
   ).split(" "),
 );
 
+// Connections (nt-office AW-C): a skill may name the connectors it needs
+// (a provider such as `stripe`, or a connection's short name) and allow
+// their tools as `<connector>.<tool>` (office_domain::agent_skill
+// normalize_connectors / is_connector_tool).
+const MAX_CONNECTORS = 8;
+const CONNECTOR = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const CONNECTOR_TOOL = /^([a-z0-9]+(?:-[a-z0-9]+)*)\.([A-Za-z0-9_-]{1,64})$/;
+
 /** A bounded frontmatter reader: `key: value`, quoted values, `|` / `>` blocks, `- item` lists. */
 function frontmatter(text) {
   if (!text.startsWith("---\n")) return null;
@@ -91,10 +99,24 @@ for (const skill of skills) {
   if (fields.license !== "Apache-2.0") problem(skill, 'license: must be "Apache-2.0" (the repository license)');
   if (Buffer.byteLength(body) > MAX_BODY) problem(skill, `body is over ${MAX_BODY / 1024} KiB`);
   if (body.trim().length === 0) problem(skill, "the body is empty");
+  const asList = (value) =>
+    Array.isArray(value) ? value : String(value).replace(/^\[|\]$/g, "").split(/[\s,]+/).filter(Boolean);
+  const connectors = fields.connectors === undefined ? [] : asList(fields.connectors);
+  if (connectors.length > MAX_CONNECTORS) problem(skill, `connectors: at most ${MAX_CONNECTORS}`);
+  for (const connector of connectors) {
+    if (!CONNECTOR.test(connector) || connector.length > 32) problem(skill, `connectors: "${connector}" is not a connector name (a provider such as stripe, or a connection's short name)`);
+  }
   const tools = fields["allowed-tools"];
   if (tools !== undefined) {
-    const list = Array.isArray(tools) ? tools : String(tools).split(/[\s,]+/).filter(Boolean);
-    for (const tool of list) if (!KNOWN_TOOLS.has(tool)) problem(skill, `allowed-tools: "${tool}" is not an nt-office tool`);
+    for (const tool of asList(tools)) {
+      const connectorTool = CONNECTOR_TOOL.exec(tool);
+      if (connectorTool) {
+        if (tool.length > 64) problem(skill, `allowed-tools: "${tool}" is longer than 64 characters`);
+        if (!connectors.includes(connectorTool[1])) problem(skill, `allowed-tools: "${tool}" names connector "${connectorTool[1]}"; list it under connectors`);
+      } else if (!KNOWN_TOOLS.has(tool)) {
+        problem(skill, `allowed-tools: "${tool}" is not an nt-office tool or a <connector>.<tool> name`);
+      }
+    }
   }
   let count = 0;
   let bytes = 0;

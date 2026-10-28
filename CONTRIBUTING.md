@@ -31,7 +31,31 @@ license: Apache-2.0
 ---
 ```
 
-`allowed-tools` is optional. If you use it, list only nt-office tool names (see `scripts/check-skills.mjs`).
+`allowed-tools` is optional. If you use it, list only nt-office tool names (see `scripts/check-skills.mjs`)
+and the connector tools described below.
+
+### Skills that use a connected service
+
+nt-office can connect to services such as Stripe, HubSpot, Notion, Linear or GitHub (Settings › Integrations ›
+Connections); an administrator grants a connection's tools to each AI agent. A skill that needs such a service
+says so:
+
+```yaml
+---
+name: stripe-payment-follow-up
+description: When a customer asks about a payment, find it in Stripe and answer from what it shows.
+license: Apache-2.0
+connectors: [stripe]                                  # providers or connection short names, at most 8
+allowed-tools: [stripe.stripe_api_read, reply_ticket] # connector tools are <connector>.<tool>
+---
+```
+
+- Every `<connector>.<tool>` in `allowed-tools` must name a connector listed in `connectors`.
+- Name tools exactly as the service's MCP server lists them (Stripe: `stripe_api_read`, `stripe_api_search`, …).
+- Installing the skill on an agent without that connector shows "Needs: stripe — not granted"; at run time the
+  agent is told which connector is missing and says so instead of guessing.
+- Write the steps so that reading comes first. Payments, refunds and deletions always wait for a person in
+  nt-office; the skill should say that such a step needs approval.
 
 ## Limits (the same nt-office applies when it imports a skill)
 
@@ -42,6 +66,7 @@ license: Apache-2.0
 | `SKILL.md` body | at most 64 KiB |
 | Other files | text only (`.md .csv .txt .json .yaml .yml`), at most 10, 256 KiB in total |
 | Characters | no zero-width or bidirectional control characters |
+| `connectors` | at most 8; each a provider or connection short name (lowercase letters, digits, hyphens) |
 
 No scripts, executables, images or archives: nt-office never runs a skill's files.
 
