@@ -19,15 +19,16 @@ const MAX_REFERENCE_BYTES = 256 * 1024;
 const REFERENCE_EXTENSIONS = new Set([".md", ".csv", ".txt", ".json", ".yaml", ".yml"]);
 // Zero-width, bidirectional and other invisible characters.
 const HIDDEN = /[​-‏‪-‮⁠-⁤⁦-⁩﻿]/;
-// nt-office MCP tools an `allowed-tools` list may name (office-core
-// mcp::FEATURE_TOOLS). Anything else is unavailable to nt-office agents.
+// nt-office MCP feature tools plus the cross-area customer invitation tool
+// from office-mcp's catalog. The server also checks import mappings and grants;
+// passing this lightweight check does not grant a tool to an agent.
 const KNOWN_TOOLS = new Set(
   (
     "bulk_update_tasks claim_ticket create_task create_ticket_for_customer delegate_task edit_message get_agent_skill " +
     "get_article get_message get_person get_task get_ticket handoff_ticket list_agent_skills list_inbox list_my_tasks " +
     "list_tags list_tickets list_workspaces lookup_people lookup_tasks mark_conversation_read mark_inbox post_message " +
     "propose_article_draft react_to_message read_conversation record_knowledge_gap release_ticket reply_ticket " +
-    "request_article_publish request_close_ticket search_knowledge search_people search_skill_library search_tasks " +
+    "request_article_publish request_close_ticket request_invite_customer search_knowledge search_people search_skill_library search_tasks " +
     "search_tickets send_direct_message set_task_tags snooze_inbox suggest_capability suggest_skills update_task update_ticket"
   ).split(" "),
 );
