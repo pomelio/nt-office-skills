@@ -2,13 +2,15 @@
 name: send-stripe-invoice
 description: Use on a customer ticket when an invoice must be created in Stripe and emailed to the customer — the customer asked for one, or the ticket's plan or your instructions include invoicing. Reads first, prepares the invoice, and sends it only after a person approves each step.
 license: Apache-2.0
-connectors: [stripe]
+connectors: [stripe, google]
 ---
 
 # Send a Stripe invoice
 
-A customer should get a correct invoice by email, from Stripe, with a page to pay it. You prepare the invoice
-from what was agreed on the ticket; a person approves every Stripe write; Stripe sends the email.
+A customer should get a correct Stripe invoice and a Gmail email with its payment link. You prepare the
+invoice from what was agreed on the ticket; a person approves every Stripe write. Send the email through
+the employee’s granted Google Gmail connection, using its normal send approval and cooling rules.
+The company system-email setting does not grant this employee a Gmail tool.
 Every customer invoice belongs to a ticket, so the customer and the team can see what was sent and why.
 
 ## When to use it
@@ -36,6 +38,20 @@ disable automatic tax to make a request pass. If Stripe requires tax details tha
 
 If anything required is missing or unclear, ask once, listing everything that is missing: on the ticket
 (`reply_ticket`) or to the person who asked you. Never guess a price, a quantity, a currency or a due date.
+
+## Planning and prerequisites
+
+In Plan mode, read the relevant skills and propose the work; never create a guest, invoice, or email.
+The customer may be new. Plan one complete execution step for an Account manager where possible, with
+all customer details, invoice facts, origin and Gmail delivery instructions. After Apply, use the
+`create-guest` skill for the new-customer approval and ticket prerequisite. If that skill is not installed,
+follow step 1 below. Do not claim the customer must already exist before planning.
+
+Before the first Stripe write, confirm that a granted Google connection exposes `gmail_send_message`
+and that it is enabled. If missing or paused, tell the requesting person the reason and ask them to
+contact an administrator to configure or grant the mail connection. Do not create an invoice you cannot
+send, fall back to SMTP, or send through Stripe instead. Tools can be named with the connection's short
+name at runtime; use the actual granted tool, not an invented prefix.
 
 ## Steps
 
@@ -89,21 +105,40 @@ If anything required is missing or unclear, ask once, listing everything that is
      not an invented top-level `unit_amount`. Include required product data, or use an existing Price only
      after checking that its unit price and currency match the agreement. If permissions or required
      pricing data are missing, hand off instead of changing the invoice or creating extra writes.
-   - d. **Read back, then send.** Check the invoice's customer email, all lines, subtotal, taxes, total,
-     currency and terms against the agreement. A mismatch needs a person; do not send it. Then request
-     `POST /v1/invoices/{id}/send`. Check the response and resulting status; if Stripe requires an explicit
-     finalization, that is a separate approved write (`POST /v1/invoices/{id}/finalize`,
-     `auto_advance=false`) before sending. Never turn on automatic sending to avoid an approval.
+   - d. **Read back, then finalize.** Check the invoice's customer email, every line, subtotal,
+     taxes, total, currency and terms. A mismatch needs a person; do not send. Request the approved write
+     `POST /v1/invoices/{id}/finalize` with `auto_advance=false`. Read back the finalized invoice and its
+     `hosted_invoice_url`. Never call the Stripe `/send` endpoint or enable automatic sending: Gmail
+     handles delivery. If finalization fails or the URL is missing, stop and report the reason.
 
    If a person declines a step or its approval expires, stop. Write on the ticket what happened, and don't
    try again without new instructions. A draft left from steps b–c can stay; tell the owner it exists.
 
-6. **Tell the customer.** Read the sent invoice (`stripe_api_read`): number, total, due date and the hosted
-   invoice link. Reply on the ticket (`reply_ticket`), in the customer's language and in three to five
-   sentences: the invoice number, the amount and currency, the due date, that Stripe emailed it to their
-   address, and the link to pay. A successful send does not prove delivery or payment; don't say the
-   customer received it or has paid. In test mode say it was simulated: Stripe's API sends no email there.
-   When nothing else is open, request closing (`request_close_ticket`).
+6. **Email through Gmail.** Read the finalized invoice: number, total, currency, due date and
+   hosted invoice link. Recheck the ticket's requester email and contact preference. Prepare a plain-text
+   email with the invoice number in the subject and the amount, currency, due date and exact returned
+   hosted link in its body. Use the granted `gmail_send_message` tool with `to` containing only the
+   requester email, `subject` and `body`; do not add CC recipients. The payment page also offers a PDF;
+   do not invent an attachment parameter. Respect the tool's approval and cooling result and wait for
+   completion before claiming it was sent.
+
+   Before sending or retrying, inspect this work's previous tool results and the connected Gmail sent
+   messages (the granted `gmail_list_messages` and `gmail_read_message` tools) for the same recipient,
+   invoice number and link. After an uncertain send, read first; if the outcome cannot be established,
+   hand off instead of sending again. If the tool fails, report its safe error reason and ask the person
+   to contact an administrator to check the mail connection. Keep the same finalized invoice; do not
+   create another one or fall back to Stripe mail. Only record a send as successful after the Gmail
+   result confirms it; a draft, held send or pending approval is not a sent email.
+
+7. **Record the outcome on the ticket.** After Gmail confirms sending, use `reply_ticket` to report
+   the invoice number, amount, currency, due date and payment link, and that the email was sent through
+   Gmail. A send is not proof of delivery or payment. Keep internal approval details and raw provider
+   errors out of customer-visible replies. If Gmail failed, tell the requesting person the reason and
+   keep the ticket open. Request closing only when all requested work is complete.
+
+   In Stripe test mode, label both the Gmail subject and body as a test with no real payment expected.
+   Gmail is still a real send even when Stripe is in test mode: send only to the explicitly approved
+   test recipient, never to an actual customer by assuming that test mode suppresses email.
 
 ## Boundaries
 
@@ -123,17 +158,16 @@ A fictional customer writes on ticket #1042: "Please invoice us for 25 seats on 
 The price list says the annual plan is USD 120 per seat per year.
 
 1. Ask nothing: items, price, currency and terms are all known.
-2. Stripe has no customer with that email. Four approvals follow: create the customer; create the invoice
-   (USD, send_invoice, due in 14 days, metadata nt_office_ticket); add one line, "Annual plan, 25 seats",
-   quantity 25 at 12000; read back the USD 3,000.00 subtotal and agreed total, then send it.
-   This assumes no tax or balance adjustment, supported pricing and no separate finalization call;
-   finalization, if required, needs one more approval.
-3. Reply: "We've sent invoice INV-0042 for USD 3,000.00 to ana@example.com from Stripe. It's due on
-   21 November. You can pay on the invoice page: <link>. Let me know if anything on it needs to change."
-   In a test run, report "Test invoice INV-0042 was created; Stripe simulated sending and did not email it."
+2. Stripe has no customer with that email. Approved writes create the customer, the draft invoice,
+   its line for 25 seats at USD 120, and finalize it with automatic advancement disabled. Read back the
+   agreed total of USD 3,000.00, assuming no tax or balance adjustment, and its payment link.
+3. Use Gmail to send the invoice number, total, due date and returned payment link to the requester.
+   Wait for the send result, then record the outcome on ticket #1042. Do not also send through Stripe.
+   In a test run use only the approved test recipient and clearly label the email as a test.
 
 ## Stripe references
 
-- [Sending invoices, including test-mode behavior](https://docs.stripe.com/api/invoices/send)
+- [Finalizing an invoice](https://docs.stripe.com/api/invoices/finalize)
+- [Hosted invoice page and sharing its link](https://docs.stripe.com/invoicing/hosted-invoice-page)
 - [Creating a draft invoice](https://docs.stripe.com/api/invoices/create)
 - [Bulk line parameters in Stripe's official SDK](https://github.com/stripe/stripe-python/blob/master/stripe/params/_invoice_add_lines_params.py)
