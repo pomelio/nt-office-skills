@@ -1,6 +1,6 @@
 ---
 name: send-stripe-invoice
-description: Use on a customer ticket when an invoice must be created in Stripe and emailed to the customer — the customer asked for one, or the ticket's plan or your instructions include invoicing. Reads first, prepares the invoice, and sends it only after a person approves each step.
+description: Use on a customer ticket when an invoice must be created in Stripe and emailed to the customer — the customer asked for one, or the ticket's plan or your instructions include invoicing. Reads first, then prepares, finalizes and sends the invoice within the employee's autonomy; anything that moves money waits for a person.
 license: Apache-2.0
 connectors: [stripe, google]
 ---
@@ -8,7 +8,8 @@ connectors: [stripe, google]
 # Send a Stripe invoice
 
 A customer should get a correct Stripe invoice and a Gmail email with its payment link. You prepare the
-invoice from what was agreed on the ticket; a person approves every Stripe write. Send the email through
+invoice from what was agreed on the ticket; the person's request is the instruction, and your autonomy decides
+whether a customer or invoice write runs at once or waits for approval. Send the email through
 the employee’s granted Google Gmail connection, using its normal send approval and cooling rules.
 The company system-email setting does not grant this employee a Gmail tool.
 Every customer invoice belongs to a ticket, so the customer and the team can see what was sent and why.
@@ -86,10 +87,13 @@ name at runtime; use the actual granted tool, not an invented prefix.
    invoices before retrying. An existing paid or sent invoice is not a new invoice request. For a matching
    draft, ask whether to resume it; never add the same lines twice or resend without new instructions.
 
-5. **Prepare and send (writes).** Each call to `stripe_api_write` waits for a person's approval before it
-   runs, whatever your autonomy. A pending approval is not a completed write: wait for its resolution and
-   read the result before continuing. Reuse an operation's idempotency key if the connector supports it;
-   don't submit a replacement while its outcome is unknown. Keep arguments self-explanatory. Before each one,
+5. **Prepare and send (writes).** nt-office judges each `stripe_api_write` call by its API path: creating or
+   updating a customer and creating, adding lines to or finalizing an invoice follow your autonomy for
+   connection writes; any other write (refunds, payouts, charges, voids, deletions) waits for a person's
+   approval. Always pass the API path (for example `/v1/invoices`) so the call can be recognised. If a call
+   returns a pending approval, it is not a completed write: wait for its resolution (`get_pending_action`
+   with the `AIR-…` reference) and read the result before continuing. Reuse an operation's idempotency key if
+   the connector supports it; don't submit a replacement while its outcome is unknown. Keep arguments self-explanatory. Before each one,
    say in one line what it does and the invoice total, for example: "Create the invoice for Acme Ltd:
    USD 1,500.00, due in 14 days."
    - a. Only if step 4 found none: **create the customer** (`POST /v1/customers`): email, name, and metadata
@@ -158,7 +162,7 @@ A fictional customer writes on ticket #1042: "Please invoice us for 25 seats on 
 The price list says the annual plan is USD 120 per seat per year.
 
 1. Ask nothing: items, price, currency and terms are all known.
-2. Stripe has no customer with that email. Approved writes create the customer, the draft invoice,
+2. Stripe has no customer with that email. Writes within the employee's autonomy create the customer, the draft invoice,
    its line for 25 seats at USD 120, and finalize it with automatic advancement disabled. Read back the
    agreed total of USD 3,000.00, assuming no tax or balance adjustment, and its payment link.
 3. Use Gmail to send the invoice number, total, due date and returned payment link to the requester.

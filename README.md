@@ -18,7 +18,7 @@ nt-office, Claude Code and other tools that read Agent Skills.
 | [knowledge-article-writing](skills/knowledge-article-writing/SKILL.md) | Turns a repeated answer or a knowledge gap into an article draft |
 | [meeting-notes-follow-up](skills/meeting-notes-follow-up/SKILL.md) | Writes the summary, decisions and tasks after a meeting |
 | [sales-discovery-call](skills/sales-discovery-call/SKILL.md) | Qualifies a lead, records their needs and agrees the next step |
-| [send-stripe-invoice](skills/send-stripe-invoice/SKILL.md) | Creates a Stripe invoice from a ticket and sends its payment link through Gmail, with approval |
+| [send-stripe-invoice](skills/send-stripe-invoice/SKILL.md) | Creates a Stripe invoice from a ticket and sends its payment link through Gmail; money moves need approval |
 | [ticket-triage](skills/ticket-triage/SKILL.md) | Classifies, claims and answers or routes a customer ticket |
 | [weekly-status-report](skills/weekly-status-report/SKILL.md) | Summarises the week's tasks and tickets for the owner |
 
